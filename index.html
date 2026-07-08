@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scrolling Banner</title>
+    <style>
+        /* --- 1. CORE SETUP --- */
+        :root {
+            --bg-color: #111111;
+            --menu-bg: rgba(34, 34, 34, 0.95);
+            --text-color: #ffffff;
+            --accent: #4CAF50;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100dvh; /* dvh ensures it fits exactly inside mobile browsers */
+            background-color: var(--bg-color);
+            overflow: hidden;
+            font-family: system-ui, -apple-system, sans-serif;
+            touch-action: none; /* Prevents accidental pull-to-refresh */
+        }
+
+        /* --- 2. BANNER TEXT --- */
+        #banner-container {
+            width: 100vw;
+            height: 100dvh;
+            display: flex;
+            align-items: center;
+        }
+
+#banner-text {
+    font-size: 95dvh; /* Drives the size of the letters past the screen height */
+    line-height: 100dvh; /* Keeps the invisible bounding box constrained */
+    margin-top: -10dvh; /* Pulls the text up to hide the font's built-in top padding */
+    
+    white-space: nowrap;
+    font-weight: bold;
+    color: var(--text-color);
+    will-change: transform; 
+    transform: translateX(100vw);
+}
+
+        /* --- 3. INVISIBLE TAP ZONE --- */
+        #tap-zone {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100dvh;
+            z-index: 10;
+            display: none; /* Hidden until running */
+            cursor: pointer;
+        }
+
+        /* --- 4. CONTROLS MENU --- */
+        #controls-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100dvh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            background-color: rgba(0, 0, 0, 0.6);
+        }
+
+        .menu-box {
+            background: var(--menu-bg);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 2px solid #444;
+            width: 85%;
+            max-width: 400px;
+            color: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+
+        .menu-box h2 {
+            margin: 0 0 10px 0;
+            text-align: center;
+            font-size: 1.5rem;
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: #ccc;
+            margin-bottom: -0.8rem;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            border: 1px solid #555;
+            background: #333;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        input[type="range"] {
+            flex-grow: 1;
+        }
+
+        input[type="color"] {
+            height: 40px;
+            width: 100%;
+            border: none;
+            border-radius: 8px;
+            background: none;
+            cursor: pointer;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--accent);
+            color: white;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:active {
+            background-color: #388E3C;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Scrolling Text -->
+    <div id="banner-container">
+        <div id="banner-text"></div>
+    </div>
+
+    <!-- Invisible Full-Screen Button to Stop -->
+    <div id="tap-zone"></div>
+
+    <!-- Setup Menu -->
+    <div id="controls-overlay">
+        <div class="menu-box">
+            <h2>Banner Setup</h2>
+            
+            <label for="msg-input">Message</label>
+            <input type="text" id="msg-input" placeholder="Type here..." value="">
+            
+            <div class="row">
+                <div style="flex: 2; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label for="speed-input">Scroll Speed</label>
+                    <input type="range" id="speed-input" min="2" max="35" value="12">
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label for="color-input">Color</label>
+                    <input type="color" id="color-input" value="#ffffff">
+                </div>
+            </div>
+
+            <button id="start-btn">Start Scrolling</button>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const bannerText = document.getElementById('banner-text');
+        const tapZone = document.getElementById('tap-zone');
+        const controls = document.getElementById('controls-overlay');
+        const msgInput = document.getElementById('msg-input');
+        const speedInput = document.getElementById('speed-input');
+        const colorInput = document.getElementById('color-input');
+        const startBtn = document.getElementById('start-btn');
+
+        // --- State Variables ---
+        let isRunning = false;
+        let speed = 12;
+        let xPos = window.innerWidth;
+        let animationId;
+
+        // --- Animation Loop ---
+        function animate() {
+            if (!isRunning) return;
+
+            xPos -= speed;
+            const textWidth = bannerText.getBoundingClientRect().width;
+            
+            // If the text has completely moved off the left screen edge
+            if (xPos < -textWidth) {
+                xPos = window.innerWidth; // Reset to the right edge
+            }
+            
+            bannerText.style.transform = `translateX(${xPos}px)`;
+            
+            // Loop at ~60fps
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // --- Fullscreen Helper ---
+        function requestFullScreen() {
+            const doc = window.document;
+            const docEl = doc.documentElement;
+
+            const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+            if(requestFullScreen) {
+                requestFullScreen.call(docEl).catch(err => {
+                    console.log("Fullscreen naturally blocked by browser unless triggered by strong user gesture.");
+                });
+            }
+        }
+
+        function exitFullScreen() {
+            const doc = window.document;
+            const exitFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+            if(exitFullScreen && doc.fullscreenElement) {
+                exitFullScreen.call(doc);
+            }
+        }
+
+        // --- Start Button Click ---
+        startBtn.addEventListener('click', () => {
+            // Apply Settings
+            const message = msgInput.value.trim();
+            bannerText.textContent = message === "" ? " " : message; 
+            bannerText.style.color = colorInput.value;
+            speed = parseFloat(speedInput.value);
+            
+            // Hide Menu, Show Tap Zone
+            controls.style.display = 'none';
+            tapZone.style.display = 'block';
+            
+            // Try Fullscreen (requires user interaction, which this click provides)
+            requestFullScreen();
+
+            // Reset Position and Start
+            xPos = window.innerWidth; 
+            isRunning = true;
+            cancelAnimationFrame(animationId); 
+            animate();
+        });
+
+        // --- Stop (Tap Zone) Click ---
+        tapZone.addEventListener('click', () => {
+            // Stop Animation
+            isRunning = false;
+            
+            // Show Menu, Hide Tap Zone
+            controls.style.display = 'flex';
+            tapZone.style.display = 'none';
+
+            // Exit Fullscreen
+            exitFullScreen();
+        });
+    </script>
+</body>
+</html>
